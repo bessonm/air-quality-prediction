@@ -102,7 +102,13 @@ with GeodairClient() as client:
 #### Télécharger une longue période par morceaux
 
 ```python
-with GeodairClient(poll_interval=5, max_download_attempts=30) as client:
+with GeodairClient(
+    poll_interval=5,
+    max_download_attempts=30,
+    min_request_interval=5,
+    max_rate_limit_retries=3,
+    rate_limit_backoff=30,
+) as client:
     chemin = client.download_measurements_chunked_csv(
         date_debut="01/01/2015 00:00",
         date_fin="01/01/2026 00:00",
@@ -115,11 +121,44 @@ with GeodairClient(poll_interval=5, max_download_attempts=30) as client:
     )
 ```
 
-- Les intervalles sont contigus et chaque CSV brut reste dans un sous-dossier unique `*_chunks`.
+- Les intervalles sont contigus et chaque CSV brut reste dans un sous-dossier stable `*_chunks`.
 - Une fois tous les téléchargements terminés, les lignes sont concaténées dans le CSV final, avec un seul en-tête, sans calcul ni déduplication.
 - L'assemblage se fait en flux, sans charger toute la période en mémoire.
 - Si un morceau échoue, les fichiers précédents sont conservés et le fichier final n'est pas créé.
-- Il n'y a pas de reprise automatique.
+- Avec `resume=True` (par défaut), relancer exactement le même appel réutilise les morceaux terminés et télécharge ceux qui manquent. Garder la date de départ initiale pour assembler toute la période.
+- Le manifeste `request.json` empêche de reprendre avec des filtres, dates ou un découpage différents. Les fichiers sont publiés seulement une fois complètement écrits ; les `.part` ne sont jamais repris.
 - Réduire `chunk_days` si un morceau dépasse encore le nombre de lignes autorisé.
 - Le dossier par défaut est `data/raw/geodair`, relatif au répertoire courant.
-- Un fichier final existant n'est jamais écrasé ; omettre `filename` pour obtenir un nom unique.
+- Un fichier final existant n'est jamais écrasé. Sans `filename`, le nom dépend des paramètres et reste identique pour faciliter la reprise.
+
+Pour reprendre un dossier créé par l'ancienne version, fournir
+`resume_from="../../data/raw/geodair/<ancien_dossier>_chunks"`, avec les mêmes
+filtres et le même `chunk_days` que lors du téléchargement initial. Inclure les
+intervalles existants dans la période demandée. Le client vérifie les noms et la
+structure des CSV avant de créer un manifeste. Ces anciens dossiers ne contenant
+pas les paramètres de requête, leur correspondance avec les filtres reste à la
+charge de l'appelant. La validation structurelle ne garantit pas qu'un ancien
+fichier tronqué à une frontière de ligne soit complet.
+
+La reprise s'appuie sur les bornes des intervalles terminés, pas sur la dernière
+mesure du CSV : une station peut avoir des données manquantes. Les morceaux vides
+sont également considérés comme terminés. Aucun téléchargement n'est relancé
+pour rafraîchir les données des morceaux existants.
+
+Toutes les requêtes d'une instance sont espacées d'au moins
+`min_request_interval` secondes après la réponse précédente. Sur 429, le client
+respecte `Retry-After` (secondes ou date HTTP), sinon attend 30, 60 puis 120 secondes
+par défaut. Il réessaie la même requête, notamment le même identifiant sur
+`/download`, puis lève `HTTPError` si les trois reprises échouent. Cette limite
+s'applique à chaque requête et est distincte des tentatives d'attente 404/412.
+Le délai `timeout` limite l'inactivité réseau, pas la durée totale de l'opération.
+Utiliser une seule instance séquentiellement : les quotas ne sont pas coordonnés
+entre plusieurs clients, notebooks ou processus. Aucun quota précis de Geod'air
+n'est présumé par ces réglages.
+
+Pour afficher les morceaux réutilisés, les téléchargements et les pauses 429 :
+
+```python
+import logging
+logging.basicConfig(level=logging.INFO)
+```

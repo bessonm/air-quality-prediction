@@ -1,7 +1,11 @@
 import csv
+import hashlib
+import json
+import logging
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from io import StringIO
 from pathlib import Path
 from types import TracebackType
@@ -12,6 +16,8 @@ import requests
 from dotenv import find_dotenv, load_dotenv
 
 type QueryValue = str | int | bool | None
+
+logger = logging.getLogger(__name__)
 
 
 class GeodairClient:
@@ -27,6 +33,13 @@ class GeodairClient:
     ``poll_interval`` secondes entre les réponses d'attente (412, ainsi que
     404 après une génération réussie). Utiliser le client dans
     un bloc ``with`` ou appeler ``close()`` pour libérer sa session HTTP.
+
+    ``min_request_interval`` espace toutes les requêtes de cette instance
+    (5 secondes après la fin de la précédente). Les 429 sont réessayés jusqu'à
+    ``max_rate_limit_retries`` fois : Retry-After est prioritaire, sinon le
+    délai vaut rate_limit_backoff * 2**tentative (30, 60, 120 s par défaut).
+    Ces attentes s'ajoutent au temps de traitement ; timeout n'est pas un
+    délai global. Utiliser une seule instance, de manière séquentielle.
     """
 
     BASE_URL = "https://www.geodair.fr/api-ext"
@@ -38,9 +51,20 @@ class GeodairClient:
             timeout: float = 30.0,
             poll_interval: float = 5.0,
             max_download_attempts: int = 30,
+            min_request_interval: float = 5.0,
+            max_rate_limit_retries: int = 3,
+            rate_limit_backoff: float = 30.0,
     ) -> None:
         if timeout <= 0 or poll_interval < 0 or max_download_attempts < 1:
             raise ValueError("Délais invalides ou nombre de tentatives inférieur à 1.")
+        if min_request_interval < 0 or rate_limit_backoff <= 0:
+            raise ValueError("Intervalle négatif ou délai de reprise non positif.")
+        if (
+            isinstance(max_rate_limit_retries, bool)
+            or not isinstance(max_rate_limit_retries, int)
+            or max_rate_limit_retries < 0
+        ):
+            raise ValueError("max_rate_limit_retries doit être un entier positif ou nul.")
         load_dotenv(
             dotenv_path=env_path if env_path is not None else find_dotenv(usecwd=True),
             override=False,
@@ -52,6 +76,10 @@ class GeodairClient:
         self.timeout = timeout
         self.poll_interval = poll_interval
         self.max_download_attempts = max_download_attempts
+        self.min_request_interval = min_request_interval
+        self.max_rate_limit_retries = max_rate_limit_retries
+        self.rate_limit_backoff = rate_limit_backoff
+        self._next_request_at = 0.0
         self._session = requests.Session()
         self._session.headers.update(
             {"apikey": api_key, "Accept": "text/csv; charset=UTF-8"}
@@ -93,17 +121,50 @@ class GeodairClient:
             for key, value in params.items()
             if value is not None
         }
-        response = self._session.get(
-            f"{self.BASE_URL}{path}", params=query, timeout=self.timeout,
-            headers=headers,
-            allow_redirects=False,
-        )
+        for retry in range(self.max_rate_limit_retries + 1):
+            delay = self._next_request_at - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
+            try:
+                response = self._session.get(
+                    f"{self.BASE_URL}{path}", params=query, timeout=self.timeout,
+                    headers=headers, allow_redirects=False,
+                )
+            finally:
+                self._next_request_at = time.monotonic() + self.min_request_interval
+            if response.status_code != 429:
+                break
+            delay = self._rate_limit_delay(response, retry)
+            self._next_request_at = max(self._next_request_at, time.monotonic() + delay)
+            if retry == self.max_rate_limit_retries:
+                response.raise_for_status()
+            logger.warning(
+                "Geod'air 429 sur %s : nouvelle tentative %s/%s dans %.1f s.",
+                path, retry + 1, self.max_rate_limit_retries,
+                max(delay, self.min_request_interval),
+            )
+            response.close()
         # Ne pas transmettre la clé API à une éventuelle cible de redirection.
         if 300 <= response.status_code < 400:
             raise requests.HTTPError("Redirection Geod'air inattendue.", response=response)
         if response.status_code not in allowed_statuses:
             response.raise_for_status()
         return response
+
+    def _rate_limit_delay(self, response: requests.Response, retry: int) -> float:
+        """Lire Retry-After (secondes ou date HTTP), sinon attendre exponentiellement."""
+        value = response.headers.get("Retry-After", "").strip()
+        if value.isascii() and value.isdigit():
+            return float(value)
+        if value:
+            try:
+                deadline = parsedate_to_datetime(value)
+                if deadline.tzinfo is None:
+                    deadline = deadline.replace(tzinfo=timezone.utc)
+                return max(0.0, (deadline - datetime.now(timezone.utc)).total_seconds())
+            except (ValueError, TypeError, OverflowError):
+                pass
+        return self.rate_limit_backoff * 2 ** retry
 
     @staticmethod
     def _read_csv(response: requests.Response) -> pd.DataFrame:
@@ -223,8 +284,8 @@ class GeodairClient:
         ``reglementaire`` sélectionne automatiquement l'export avancé.
         Après génération, les réponses 404 et 412 du téléchargement sont
         réessayées : le serveur peut renvoyer 404 avant que le CSV soit prêt.
-        Une attente épuisée lève requests.Timeout ; les autres erreurs HTTP
-        lèvent requests.HTTPError sans nouvelle tentative.
+        Une attente épuisée lève requests.Timeout. Les 429 suivent la politique
+        de temporisation du client ; les autres erreurs HTTP sont propagées.
         """
         response = self._request_measurements({
             "date_debut": date_debut, "date_fin": date_fin,
@@ -281,8 +342,7 @@ class GeodairClient:
             "date_calcul": date_calcul, "reglementaire": reglementaire,
         }, avance=avance)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        with destination.open("xb") as csv_file:
-            csv_file.write(response.content)
+        self._write_bytes(destination, response.content)
         return destination
 
     def download_measurements_chunked_csv(
@@ -292,6 +352,8 @@ class GeodairClient:
             type_donnee: str,
             *,
             chunk_days: int = 31,
+            resume: bool = True,
+            resume_from: str | Path | None = None,
             directory: str | Path = "data/raw/geodair",
             filename: str | None = None,
             polluant: str | None = None,
@@ -313,13 +375,20 @@ class GeodairClient:
         suivant. Les filtres sont ceux de get_measurements. Aucune ligne
         n'est dédupliquée et aucune moyenne n'est calculée.
 
-        Les CSV bruts sont conservés dans un sous-dossier unique *_chunks.
+        Les CSV bruts sont conservés dans un sous-dossier stable *_chunks.
+        Avec resume=True, relancer les mêmes paramètres reprend les morceaux
+        manquants. Un manifeste vérifie la période, les filtres et chunk_days.
+        Le nom par défaut dépend de ces paramètres et reste stable.
+        resume_from permet de choisir un ancien dossier *_chunks sans manifeste :
+        l'appelant doit garantir qu'il provient des mêmes filtres et du même
+        découpage. Les anciens CSV sont vérifiés avant leur réutilisation.
         Le fichier final contient un seul en-tête, en UTF-8 avec BOM et avec
         le séparateur point-virgule. Les valeurs restent des chaînes.
         Un Path absolu est retourné ; aucun fichier existant n'est écrasé.
         Si un appel échoue, les morceaux déjà téléchargés restent disponibles
         et aucun fichier final n'est publié. Réduire chunk_days si un morceau
-        dépasse encore la limite de lignes de l'API. Pas de reprise automatique.
+        dépasse encore la limite de lignes de l'API. Les erreurs 429 sont réessayées
+        sur la même requête, selon la politique du client.
         """
         if isinstance(chunk_days, bool) or not isinstance(chunk_days, int) or chunk_days < 1:
             raise ValueError("chunk_days doit être un entier strictement positif.")
@@ -334,8 +403,21 @@ class GeodairClient:
         if not polluant and famille_polluant is None:
             raise ValueError("Renseigner polluant ou famille_polluant.")
 
+        settings = {
+            "date_debut": start.strftime(date_format),
+            "date_fin": end.strftime(date_format),
+            "chunk_days": chunk_days, "type_donnee": type_donnee,
+            "polluant": polluant, "famille_polluant": famille_polluant,
+            "station": station, "departement": departement, "region": region,
+            "zas": zas, "typologie": typologie, "influence": influence,
+            "date_calcul": date_calcul, "reglementaire": reglementaire,
+            "avance": avance,
+        }
         if filename is None:
-            filename = f"geodair_{uuid4().hex}.csv"
+            identifier = hashlib.sha256(
+                json.dumps(settings, sort_keys=True).encode("utf-8")
+            ).hexdigest()[:16]
+            filename = f"geodair_{identifier}.csv"
 
         if not filename or Path(filename).name != filename or filename in {".", ".."}:
             raise ValueError("filename doit être un nom de fichier sans répertoire.")
@@ -345,14 +427,31 @@ class GeodairClient:
         if destination.exists():
             raise FileExistsError(destination)
 
-        chunks_directory = destination.parent / f"{destination.stem}_{uuid4().hex}_chunks"
+        chunks_directory = (
+            Path(resume_from).expanduser().resolve() if resume_from is not None
+            else destination.parent / f"{destination.stem}_chunks"
+        )
+        intervals: list[tuple[datetime, datetime, Path]] = []
+        cursor = start
+        while cursor < end:
+            stop = (
+                end if chunk_days > (end - cursor).days
+                else cursor + timedelta(days=chunk_days)
+            )
+            intervals.append((cursor, stop, chunks_directory / f"{cursor:%Y%m%d%H%M}_{stop:%Y%m%d%H%M}.csv"))
+            cursor = stop
+        self._prepare_resume(
+            chunks_directory, settings, [path for _, _, path in intervals],
+            resume=resume, allow_legacy=resume_from is not None,
+        )
         chunks: list[Path] = []
 
-        while start < end:
-            stop = (
-                end if chunk_days > (end - start).days
-                else start + timedelta(days=chunk_days)
-            )
+        for start, stop, chunk_path in intervals:
+            if chunk_path.exists():
+                logger.info("Morceau déjà téléchargé : %s", chunk_path.name)
+                chunks.append(chunk_path)
+                continue
+            logger.info("Téléchargement du morceau %s", chunk_path.name)
             chunk = self.download_measurements_csv(
                 date_debut=start.strftime(date_format),
                 date_fin=stop.strftime(date_format),
@@ -372,10 +471,64 @@ class GeodairClient:
                 avance=avance,
             )
             chunks.append(chunk)
-            start = stop
 
+        destination.parent.mkdir(parents=True, exist_ok=True)
         self._merge_csv_files(chunks, destination)
         return destination
+
+    @staticmethod
+    def _write_bytes(destination: Path, content: bytes) -> None:
+        """Publier un fichier complet sans écraser une destination existante."""
+        temporary = destination.with_name(f".{destination.name}.{uuid4().hex}.part")
+        try:
+            with temporary.open("xb") as output:
+                output.write(content)
+            os.link(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def _prepare_resume(
+        self, directory: Path, settings: dict[str, QueryValue], expected: list[Path],
+        *, resume: bool, allow_legacy: bool,
+    ) -> None:
+        """Vérifier les paramètres et les anciens morceaux avant tout appel réseau."""
+        if allow_legacy and (not resume or not directory.is_dir()):
+            raise ValueError("resume_from exige resume=True et un dossier existant.")
+        if directory.exists() and not resume:
+            raise FileExistsError(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        manifest = directory / "request.json"
+        if manifest.exists():
+            if json.loads(manifest.read_text(encoding="utf-8")) != settings:
+                raise ValueError("Le dossier de reprise correspond à d'autres paramètres.")
+        else:
+            existing = set(directory.glob("*.csv"))
+            if existing and not allow_legacy:
+                raise ValueError("Dossier sans manifeste : utiliser explicitement resume_from.")
+            if existing - set(expected):
+                raise ValueError("Les anciens CSV ne correspondent pas au découpage demandé.")
+            # Les anciennes versions écrivaient directement la destination :
+            # contrôler la structure avant d'adopter ces fichiers.
+            for path in sorted(existing):
+                self._validate_saved_csv(path)
+            self._write_bytes(
+                manifest, json.dumps(settings, indent=2, ensure_ascii=False).encode("utf-8")
+            )
+
+    @staticmethod
+    def _validate_saved_csv(path: Path) -> None:
+        """Vérifier la structure d'un ancien CSV, sans modifier ses valeurs."""
+        with path.open(encoding="utf-8-sig", newline="") as source:
+            sample = source.read(8192)
+            if not sample.strip():
+                return  # Une réponse 204 pouvait produire un fichier vide.
+            dialect = csv.Sniffer().sniff(sample, delimiters=";,\t|")
+            source.seek(0)
+            reader = csv.reader(source, dialect, strict=True)
+            header = next(reader)
+            for row in reader:
+                if len(row) != len(header):
+                    raise ValueError(f"CSV incomplet ou mal formé : {path}")
 
     @staticmethod
     def _merge_csv_files(sources: list[Path], destination: Path) -> None:
@@ -431,8 +584,9 @@ class GeodairClient:
         ``retry_not_found`` autorise aussi les nouvelles tentatives sur 404
         pour un identifiant venant d'être généré. get_measurements l'active
         automatiquement ; un appel direct conserve une erreur 404 immédiate.
-        Un statut 204 produit un DataFrame vide. Les autres erreurs HTTP sont
-        propagées immédiatement. L'attente épuisée lève requests.Timeout.
+        Un statut 204 produit un DataFrame vide. Les 429 suivent la politique
+        de temporisation du client. Les autres erreurs HTTP sont propagées
+        immédiatement. L'attente épuisée lève requests.Timeout.
         """
         return self._read_csv(
             self._download_response(export_id, retry_not_found=retry_not_found)
