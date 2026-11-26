@@ -1,3 +1,28 @@
+# Documentation
+
+## Model Card
+
+## Experiments
+
+Les expériments conservent la traçabilité des essais intermédiaires avant une prise de décision structurante.
+Elles sont documentées dans le fichier [experiments.md](docs/experiments.md)
+
+## Decision Records
+
+Les Decision Records conservent le contexte, les alternatives et les conséquences des choix structurants : 
+- périmètre
+- sélection des données
+- protocole ou modèle retenu
+
+Les essais intermédiaires restent dans le fichier [experiments.md](docs/experiments.md)
+
+Créer un fichier dans le dossier décisions (ex. 001-selection-polluant.md) à partir du template ci-dessous, puis ajouter un lien sur l'index et dans la navigation de `zensical.toml`.
+
+Statuts possibles : proposée, acceptée, rejetée, remplacée.
+
+Lorsqu'un choix change, conserver son historique et relier la décision qui le remplace.
+
+
 # APIs
 
 # Geod'air
