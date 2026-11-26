@@ -49,7 +49,7 @@ Le modèle ne se substitue pas aux dispositifs officiels de surveillance et d'al
 
 ## Références
 
-- Notebook d'entraînement et d'évaluation.
-- Version du dataset.
-- Décision relative au choix du modèle.
-- Version du code source.
+- Notebook d'entraînement et d'évaluation
+- Version du dataset
+- Décision relative au choix du modèle
+- Version du code source (commit hash)
