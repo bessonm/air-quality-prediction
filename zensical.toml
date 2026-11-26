@@ -1,0 +1,49 @@
+[project]
+site_name = "Projet AIFS"
+site_description = "Étudier la prédictibilité de la pollution atmosphérique à Paris"
+docs_dir = "docs"
+site_dir = "site"
+not_in_nav = "/toolbox.md"
+nav = [
+  { "Accueil" = "index.md" },
+  { "Données" = "data.md" },
+  { "Décisions" = "decisions/index.md" },
+  { "Architecture" = [
+    { "Logique" = "arch/logic.md" },
+    { "Physique" = "arch/physic.md" },
+  ] },
+  { "Modèles" = "models.md" },
+  { "APIs" = [
+    { "Géod'air" = "api/geodair.md" },
+  ] },
+]
+
+[project.theme]
+language = "fr"
+features = ["content.code.annotate", "content.code.copy"]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "thème sombre"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "thème clair"
+
+[project.plugins.search]
+enabled = true
+
+[project.markdown_extensions]
+pymdownx.highlight.pygments_lang_class = true
+admonition = {}
+pymdownx.details = {}
+pymdownx.tabbed.alternate_style = true
+tables = {}
+footnotes = {}
+pymdownx.superfences.custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
