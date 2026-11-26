@@ -1,28 +1,27 @@
-# Titre
+# ADR-XXX — Titre
 
 - **Date :** AAAA-MM-JJ
-- **Statut :** proposée / acceptée / rejetée / remplacée
+- **Statut :** Proposed / Accepted / Superseded
 
 ## Contexte
+
+Quel problème nécessite une décision ?
 
 problème, contraintes et éléments connus
 
 ## Options envisagées
 
-options et compromis, y compris le maintien de l'existant si pertinent
+- Option A
+- Option B
 
-## Décision
+## Décision et justification
 
-choix retenu, ou indiquer que la décision reste ouverte
-
-## Justification
-
-critères et éléments qui motivent le choix
+Quelle option est retenue et pourquoi ?
 
 ## Conséquences
 
-bénéfices, coûts, risques et conditions de réexamen
+Quels sont les avantages, les compromis et les limites de cette décision ?
 
 ## Références
 
-expériences, sources, commit et éventuelle décision remplacée
+Liens vers les notebooks, expérimentations, sources ou décisions associées.

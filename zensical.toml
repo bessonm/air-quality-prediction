@@ -1,13 +1,20 @@
 [project]
-site_name = "AirRoute"
+site_name = "Projet AIFS"
 site_description = "Étudier la prédictibilité de la pollution atmosphérique à Paris"
 docs_dir = "docs"
 site_dir = "site"
 nav = [
   { "Accueil" = "index.md" },
   { "Données" = "data.md" },
-  { "Expérimentations" = "experiments.md" },
   { "Décisions" = "decisions/index.md" },
+  { "Architecture" = [
+    { "Logique" = "arch/logic.md" },
+    { "Physique" = "arch/physic.md" },
+  ] },
+  { "Modèles" = "models.md" },
+  { "APIs" = [
+    { "Géod'air" = "api/geodair.md" },
+  ] },
 ]
 
 [project.theme]
@@ -17,18 +24,17 @@ language = "fr"
 media = "(prefers-color-scheme: light)"
 scheme = "default"
 toggle.icon = "lucide/sun"
-toggle.name = "Passer au thème sombre"
+toggle.name = "thème sombre"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: dark)"
 scheme = "slate"
 toggle.icon = "lucide/moon"
-toggle.name = "Passer au thème clair"
+toggle.name = "thème clair"
 
 [project.plugins.search]
 enabled = true
 
-# Intégration native : https://zensical.org/docs/authoring/diagrams/
 [project.markdown_extensions]
 pymdownx.superfences.custom_fences = [
   { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
