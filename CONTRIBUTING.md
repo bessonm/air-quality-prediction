@@ -118,6 +118,7 @@ with GeodairClient(
         chunk_days=31,
         directory="../../data/raw/geodair",
         filename="no2_paris_2015_2025.csv",
+        # resume_from="../../data/raw/geodair/<ancien_dossier>_chunks"
     )
 ```
 
@@ -130,33 +131,13 @@ with GeodairClient(
 - Réduire `chunk_days` si un morceau dépasse encore le nombre de lignes autorisé.
 - Le dossier par défaut est `data/raw/geodair`, relatif au répertoire courant.
 - Un fichier final existant n'est jamais écrasé. Sans `filename`, le nom dépend des paramètres et reste identique pour faciliter la reprise.
+- Toutes les requêtes d'une instance sont espacées d'au moins`min_request_interval` secondes après la réponse précédente.
+- Sur 429, le client respecte `Retry-After` (secondes ou date HTTP), sinon attend 30, 60 puis 120 secondes
+par défaut. 
+  - Cette limite s'applique à chaque requête et est distincte des tentatives d'attente 404/412.
 
-Pour reprendre un dossier créé par l'ancienne version, fournir
-`resume_from="../../data/raw/geodair/<ancien_dossier>_chunks"`, avec les mêmes
-filtres et le même `chunk_days` que lors du téléchargement initial. Inclure les
-intervalles existants dans la période demandée. Le client vérifie les noms et la
-structure des CSV avant de créer un manifeste. Ces anciens dossiers ne contenant
-pas les paramètres de requête, leur correspondance avec les filtres reste à la
-charge de l'appelant. La validation structurelle ne garantit pas qu'un ancien
-fichier tronqué à une frontière de ligne soit complet.
 
-La reprise s'appuie sur les bornes des intervalles terminés, pas sur la dernière
-mesure du CSV : une station peut avoir des données manquantes. Les morceaux vides
-sont également considérés comme terminés. Aucun téléchargement n'est relancé
-pour rafraîchir les données des morceaux existants.
-
-Toutes les requêtes d'une instance sont espacées d'au moins
-`min_request_interval` secondes après la réponse précédente. Sur 429, le client
-respecte `Retry-After` (secondes ou date HTTP), sinon attend 30, 60 puis 120 secondes
-par défaut. Il réessaie la même requête, notamment le même identifiant sur
-`/download`, puis lève `HTTPError` si les trois reprises échouent. Cette limite
-s'applique à chaque requête et est distincte des tentatives d'attente 404/412.
-Le délai `timeout` limite l'inactivité réseau, pas la durée totale de l'opération.
-Utiliser une seule instance séquentiellement : les quotas ne sont pas coordonnés
-entre plusieurs clients, notebooks ou processus. Aucun quota précis de Geod'air
-n'est présumé par ces réglages.
-
-Pour afficher les morceaux réutilisés, les téléchargements et les pauses 429 :
+##### Pour afficher les morceaux réutilisés, les téléchargements et les pauses 429 :
 
 ```python
 import logging

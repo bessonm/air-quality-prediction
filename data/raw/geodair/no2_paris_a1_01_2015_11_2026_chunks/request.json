@@ -1,0 +1,17 @@
+{
+  "date_debut": "01/01/2015 00:00",
+  "date_fin": "24/11/2026 00:00",
+  "chunk_days": 180,
+  "type_donnee": "a1",
+  "polluant": "03",
+  "famille_polluant": null,
+  "station": null,
+  "departement": "75",
+  "region": null,
+  "zas": null,
+  "typologie": null,
+  "influence": null,
+  "date_calcul": null,
+  "reglementaire": null,
+  "avance": false
+}

@@ -326,13 +326,17 @@ class GeodairClient:
         jamais écrasé (FileExistsError). Une réponse 204 crée un fichier vide.
         Le contenu est écrit tel que reçu, sans passage par pandas.
         """
+
         if filename is None:
             filename = f"geodair_{uuid4().hex}.csv"
+
         if not filename or Path(filename).name != filename or filename in {".", ".."}:
             raise ValueError("filename doit être un nom de fichier sans répertoire.")
+
         destination = Path(directory).expanduser().resolve() / filename
         if destination.exists():
             raise FileExistsError(destination)
+
         response = self._request_measurements({
             "date_debut": date_debut, "date_fin": date_fin,
             "type_donnee": type_donnee, "polluant": polluant,
@@ -341,8 +345,10 @@ class GeodairClient:
             "typologie": typologie, "influence": influence,
             "date_calcul": date_calcul, "reglementaire": reglementaire,
         }, avance=avance)
+
         destination.parent.mkdir(parents=True, exist_ok=True)
         self._write_bytes(destination, response.content)
+
         return destination
 
     def download_measurements_chunked_csv(
@@ -566,14 +572,18 @@ class GeodairClient:
             self, params: dict[str, QueryValue], *, avance: bool
     ) -> requests.Response:
         """Générer un export de mesures et récupérer sa réponse brute."""
+
         if not params.get("polluant") and params.get("famille_polluant") is None:
             raise ValueError("Renseigner polluant ou famille_polluant.")
+
         advanced = avance or params.get("reglementaire") is not None
         suffix = "export-avance" if advanced else "export"
         response = self._get(f"/statistique/{suffix}", params)
         export_id = response.text.strip()
+
         if not export_id:
             raise ValueError("Geod'air n'a pas renvoyé d'identifiant d'export.")
+
         return self._download_response(export_id, retry_not_found=True)
 
     def download_export(
