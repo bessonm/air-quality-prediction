@@ -19,14 +19,14 @@ Ce projet s'appuie sur des données de pollution atmosphérique et des données 
 - **Producteur :** Météo-France
 - **Accès :** par département et par lots de période au format `csv.gz`, [data.gouv.fr](https://www.data.gouv.fr/datasets/donnees-climatologiques-de-base-horaires)
 - **Documentation :** [meteo-france](https://confluence-meteofrance.atlassian.net/wiki/spaces/OpenDataMeteoFrance/pages/621510657/Donn+es+climatologiques#%F0%9F%95%B0%EF%B8%8F-Donn%C3%A9es-horaires)
-- **Données :** cf. info ci-après
+- **Données :** cf. ci-après et [Champs horaires](api/meteo_france_descriptif_champs.md)
 - **Granularité :** Données horaire
 - **Périmètre :** Paris
 - **Licence :** [Licence Ouverte / Open Licence version 2.0](https://www.data.gouv.fr/pages/legal/licences/etalab-2-0)
 
 **Limites :** couverture variable selon les stations et les polluants, données manquantes, mesures potentiellement invalides et représentativité géographique limitée.
 
-??? info "Données"
+??? info "Exemple de données"
     - Température sous abri instantanée (en °C et 1/10)
     - Température du point de rosée (en °C et 1/10)
     - Humidité relative (en %)

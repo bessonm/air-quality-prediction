@@ -19,6 +19,7 @@ nav = [
   ] },
   { "APIs" = [
     { "Géod'air" = "api/geodair.md" },
+    { "Météo-France — Champs horaires" = "api/meteo_france_descriptif_champs.md" },
   ] },
 ]
 
