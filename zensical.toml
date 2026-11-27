@@ -12,7 +12,11 @@ nav = [
     { "Logique" = "arch/logic.md" },
     { "Physique" = "arch/physic.md" },
   ] },
-  { "Modèles" = "models.md" },
+  { "Recherche sur les modèles" = [
+    { "Comparaison" = "research/model_comparison.md" },
+    { "CNN LSTM" = "research/cnn_lstm.md" },
+    { "Prophet/XGBoost" = "research/prophet_xgboost.md" },
+  ] },
   { "APIs" = [
     { "Géod'air" = "api/geodair.md" },
   ] },
