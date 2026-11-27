@@ -18,22 +18,4 @@ Pour comprendre la réglementation: https://www.geodair.fr/reglementation
 
 ## Documentation
 
-La documentation du projet utilise [Zensical](https://zensical.org/).
-
-Elle références les données utilisées, les reflexions sur les modèles, l'architecture du projet et l'utilisation des clients api implémentés.
-
-### Pour lancer la documentation en local 
-- Installer les dépendances : 
-```bash
-uv sync --locked --group dev
- ```
-
-- Puis démarrer en local :
-```bash
-uv run --locked zensical serve
-```
-
-### Pour générer le site statique dans dossier `site/`
-```bash 
-uv run --locked zensical build --strict
-```
+La documentation est accessible à l'adresse : [bessonm.github.io/air-quality-prediction](https://bessonm.github.io/air-quality-prediction/).

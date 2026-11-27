@@ -1,5 +1,6 @@
 [project]
 site_name = "Projet AIFS"
+site_url = "https://bessonm.github.io/air-quality-prediction/"
 site_description = "Étudier la prédictibilité de la pollution atmosphérique à Paris"
 docs_dir = "docs"
 site_dir = "site"
