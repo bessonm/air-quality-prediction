@@ -6,15 +6,21 @@ This project aims to evaluate if and how weather forecasts can help improve the 
 |--------|--------|
 | `app/` | Application Streamlit pour présenter les résultats |
 | `data/` | Données extraites |
-| `docs/` | Documentation et suivi des décisions |
+| `docs/` | Documentation technique du projet|
 | `notebooks/` | Explorer, expérimenter, comprendre et valider des hypothèses |
 | `src/` | Classes et fonctions réutilisables (ex. client api geod'air)|
+
+## Contexte
+
+Pour comprendre la pollution de l'air et ses impacts : https://www.ecologie.gouv.fr/politiques-publiques/polluants-lair-situation-impacts-encadrement
+
+Pour comprendre la réglementation: https://www.geodair.fr/reglementation
 
 ## Documentation
 
 La documentation du projet utilise [Zensical](https://zensical.org/).
 
-Elle présente des explications sur la pollution de l'air et les polluants, les données utilisées, les expérimentations et les décisions.
+Elle références les données utilisées, les reflexions sur les modèles, l'architecture du projet et l'utilisation des clients api implémentés.
 
 ### Pour lancer la documentation en local 
 - Installer les dépendances : 

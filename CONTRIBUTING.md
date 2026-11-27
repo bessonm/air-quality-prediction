@@ -1,11 +1,10 @@
 # Documentation
 
-
 Lancer la documentation en local : [commandes du README](README.md#documentation).
 
-Pour un accès rapide à la syntaxe: [fiche mémo Markdown et Zensical](docs/toolbox.md) et la preview [http://localhost:8000/toolbox/](http://localhost:8000/toolbox/)
-
-## Model Card
+Pour voir des exemples de syntaxe en markdown et Zensical:
+- [toolbox](docs/toolbox.md)
+- preview [http://localhost:8000/toolbox/](http://localhost:8000/toolbox/)
 
 ## Decision Records
 
